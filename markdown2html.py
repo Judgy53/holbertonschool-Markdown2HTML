@@ -7,9 +7,12 @@ import sys
 import os.path
 import re
 
+
 class ParsingState():
-    def __init__ (self) -> None:
+    def __init__(self) -> None:
         self.unordered_list_started = False
+        self.ordered_list_started = False
+
 
 def main():
     """Entry point of the module.
@@ -47,15 +50,19 @@ def main():
 
 def convert_line(line, state):
     """Convert a line of markdown syntax to html syntax"""
+    if line.endswith('\n'):
+        line = line[:-1]
+
     line = convert_headings(line)
     line = convert_unordered_list(line, state)
+    line = convert_ordered_list(line, state)
 
     return line + '\n'
 
 
 def convert_headings(line):
     """Convert headings at the start of a markdown str"""
-    match = re.match('^(#{1,6}) (.+)', line)
+    match = re.match(r'^(#{1,6}) (.+)', line)
     if not match:
         return line
 
@@ -65,15 +72,15 @@ def convert_headings(line):
 
 
 def convert_unordered_list(line, state):
-    """Convert headings at the start of a markdown str"""
-    match = re.match('^- (.+)', line)
+    """Convert unordered list at the start of a markdown str"""
+    match = re.match(r'^- (.+)', line)
     if not match:
         if state.unordered_list_started:
             state.unordered_list_started = False
             return f'</ul>\n' + line
         else:
             return line
-        
+
     out = ''
     if not state.unordered_list_started:
         out += '<ul>\n'
@@ -82,13 +89,37 @@ def convert_unordered_list(line, state):
 
     return out
 
+
+def convert_ordered_list(line, state):
+    """Convert unordered list at the start of a markdown str"""
+    match = re.match(r'^\* (.+)', line)
+    if not match:
+        if state.ordered_list_started:
+            state.ordered_list_started = False
+            return f'</ol>\n' + line
+        else:
+            return line
+
+    out = ''
+    if not state.ordered_list_started:
+        out += '<ol>\n'
+        state.ordered_list_started = True
+    out += f'<li>{match.group(1)}</li>'
+
+    return out
+
+
 def check_for_missing_closures(state):
     """Closes opened lists and similar tags."""
     out = ''
     if state.unordered_list_started:
         out += convert_unordered_list('', state)
 
+    if state.ordered_list_started:
+        out += convert_ordered_list('', state)
+
     return out
+
 
 if __name__ == "__main__":
     main()
