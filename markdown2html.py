@@ -12,6 +12,7 @@ class ParsingState():
     def __init__(self) -> None:
         self.unordered_list_started = False
         self.ordered_list_started = False
+        self.paragraph_started = False
 
 
 def main():
@@ -56,6 +57,7 @@ def convert_line(line, state):
     line = convert_headings(line)
     line = convert_unordered_list(line, state)
     line = convert_ordered_list(line, state)
+    line = convert_paragraph(line, state)
 
     return line + '\n'
 
@@ -109,6 +111,27 @@ def convert_ordered_list(line, state):
     return out
 
 
+def convert_paragraph(line, state):
+    """Convert simple text into html paragraph"""
+    is_simple_text = len(line) > 0 and line[0] != '<'
+    if not is_simple_text:
+        if state.paragraph_started:
+            state.paragraph_started = False
+            return '</p>\n' + line
+        else:
+            return line
+
+    out = ''
+    if state.paragraph_started:
+        out += '<br />\n'
+    else:
+        out += '<p>\n'
+        state.paragraph_started = True
+    out += line
+
+    return out
+
+
 def check_for_missing_closures(state):
     """Closes opened lists and similar tags."""
     out = ''
@@ -117,6 +140,9 @@ def check_for_missing_closures(state):
 
     if state.ordered_list_started:
         out += convert_ordered_list('', state)
+
+    if state.paragraph_started:
+        out += convert_paragraph('', state)
 
     return out
 
