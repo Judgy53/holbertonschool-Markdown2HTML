@@ -7,6 +7,9 @@ import sys
 import os.path
 import re
 
+class ParsingState():
+    def __init__ (self) -> None:
+        self.unordered_list_started = False
 
 def main():
     """Entry point of the module.
@@ -28,22 +31,26 @@ def main():
 
     markdown_file = open(args[0], 'r')
     output_str = ''
+    state = ParsingState()
 
     try:
         for line in markdown_file.readlines():
-            output_str += convert_line(line)
+            output_str += convert_line(line, state)
     finally:
         markdown_file.close()
+
+    output_str += check_for_missing_closures(state)
 
     with open(args[1], 'w') as out_file:
         out_file.write(output_str)
 
 
-def convert_line(line):
+def convert_line(line, state):
     """Convert a line of markdown syntax to html syntax"""
     line = convert_headings(line)
+    line = convert_unordered_list(line, state)
 
-    return line
+    return line + '\n'
 
 
 def convert_headings(line):
@@ -56,6 +63,32 @@ def convert_headings(line):
 
     return f'<h{heading_level}>{match.group(2)}</h{heading_level}>'
 
+
+def convert_unordered_list(line, state):
+    """Convert headings at the start of a markdown str"""
+    match = re.match('^- (.+)', line)
+    if not match:
+        if state.unordered_list_started:
+            state.unordered_list_started = False
+            return f'</ul>\n' + line
+        else:
+            return line
+        
+    out = ''
+    if not state.unordered_list_started:
+        out += '<ul>\n'
+        state.unordered_list_started = True
+    out += f'<li>{match.group(1)}</li>'
+
+    return out
+
+def check_for_missing_closures(state):
+    """Closes opened lists and similar tags."""
+    out = ''
+    if state.unordered_list_started:
+        out += convert_unordered_list('', state)
+
+    return out
 
 if __name__ == "__main__":
     main()
