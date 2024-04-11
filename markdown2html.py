@@ -6,6 +6,7 @@
 import sys
 import os.path
 import re
+import hashlib
 
 
 class ParsingState():
@@ -54,17 +55,14 @@ def convert_line(line, state):
     if line.endswith('\n'):  # Remove trailing new line to avoid duplicates
         line = line[:-1]
 
-    orig_line = line
-
     line = convert_headings(line)
     line = convert_unordered_list(line, state)
     line = convert_ordered_list(line, state)
-
-    if line == orig_line:  # Convert to paragraph only if untouched
-        line = convert_paragraph(line, state)
-
+    line = convert_paragraph(line, state)
     line = convert_emphasis(line, "**", "b")
     line = convert_emphasis(line, "__", "em")
+    line = convert_md5(line)
+    line = convert_remove_letter(line, 'c')
 
     return line + '\n'
 
@@ -120,7 +118,7 @@ def convert_ordered_list(line, state):
 
 def convert_paragraph(line, state):
     """Convert simple text into html paragraph"""
-    is_simple_text = len(line) > 0
+    is_simple_text = len(line) > 0 and line[0] != '<'
     if not is_simple_text:
         if state.paragraph_started:
             state.paragraph_started = False
@@ -130,7 +128,7 @@ def convert_paragraph(line, state):
 
     out = ''
     if state.paragraph_started:
-        out += '<br />\n'
+        out += '<br/>\n'
     else:
         out += '<p>\n'
         state.paragraph_started = True
@@ -142,16 +140,38 @@ def convert_paragraph(line, state):
 def convert_emphasis(line, markdown_tag, html_tag):
     """Convert text emphasis to html tags"""
     markdown_tag = re.escape(markdown_tag)
-    pattern = f'{markdown_tag}(.+?){markdown_tag}'
+    pattern = re.compile(f'{markdown_tag}(.+?){markdown_tag}')
 
     m = re.search(pattern, line)
     while m:
-        replaced = line[:m.start(0)]
-        replaced += f'<{html_tag}>'
-        replaced += m.group(1)
-        replaced += f'</{html_tag}>'
-        replaced += line[m.end(0):]
-        line = replaced
+        converted = '<{1}>{0}</{1}>'.format(m.group(1), html_tag)
+        line = re.sub(re.escape(m.group(0)), converted, line)
+        m = re.search(pattern, line)
+
+    return line
+
+
+def convert_md5(line):
+    """Convert text between angled brackets to md5"""
+    pattern = re.compile(r'\[\[(.+)\]\]')
+    m = re.search(pattern, line)
+    while m:
+        converted = hashlib.md5(m.group(1).encode('utf-8')).hexdigest()
+        line = re.sub(re.escape(m.group(0)), converted, line)
+        m = re.search(pattern, line)
+
+    return line
+
+
+def convert_remove_letter(line, letter):
+    """Remove a letter from text between parenthesis"""
+    pattern = re.compile(r'\(\((.+)\)\)')
+    replace_letter_pattern = re.compile(letter, re.IGNORECASE)
+
+    m = re.search(pattern, line)
+    while m:
+        converted = replace_letter_pattern.sub('', m.group(1))
+        line = re.sub(re.escape(m.group(0)), converted, line)
         m = re.search(pattern, line)
 
     return line
