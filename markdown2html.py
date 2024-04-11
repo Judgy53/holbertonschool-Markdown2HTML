@@ -51,13 +51,20 @@ def main():
 
 def convert_line(line, state):
     """Convert a line of markdown syntax to html syntax"""
-    if line.endswith('\n'):
+    if line.endswith('\n'):  # Remove trailing new line to avoid duplicates
         line = line[:-1]
+
+    orig_line = line
 
     line = convert_headings(line)
     line = convert_unordered_list(line, state)
     line = convert_ordered_list(line, state)
-    line = convert_paragraph(line, state)
+
+    if line == orig_line:  # Convert to paragraph only if untouched
+        line = convert_paragraph(line, state)
+
+    line = convert_emphasis(line, "**", "b")
+    line = convert_emphasis(line, "__", "em")
 
     return line + '\n'
 
@@ -113,7 +120,7 @@ def convert_ordered_list(line, state):
 
 def convert_paragraph(line, state):
     """Convert simple text into html paragraph"""
-    is_simple_text = len(line) > 0 and line[0] != '<'
+    is_simple_text = len(line) > 0
     if not is_simple_text:
         if state.paragraph_started:
             state.paragraph_started = False
@@ -132,8 +139,26 @@ def convert_paragraph(line, state):
     return out
 
 
+def convert_emphasis(line, markdown_tag, html_tag):
+    """Convert text emphasis to html tags"""
+    markdown_tag = re.escape(markdown_tag)
+    pattern = f'{markdown_tag}(.+?){markdown_tag}'
+
+    m = re.search(pattern, line)
+    while m:
+        replaced = line[:m.start(0)]
+        replaced += f'<{html_tag}>'
+        replaced += m.group(1)
+        replaced += f'</{html_tag}>'
+        replaced += line[m.end(0):]
+        line = replaced
+        m = re.search(pattern, line)
+
+    return line
+
+
 def check_for_missing_closures(state):
-    """Closes opened lists and similar tags."""
+    """Closes opened tags."""
     out = ''
     if state.unordered_list_started:
         out += convert_unordered_list('', state)
